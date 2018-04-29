@@ -1,5 +1,5 @@
-test:test.c
+daemon:daemon.c
 	gcc -o $@ $^
 .PHONY:clean
 clean:
-	rm -f test
+	rm -f daemon
