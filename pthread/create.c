@@ -3,30 +3,22 @@
 #include<unistd.h>
 #include<string.h>
 #include<pthread.h>
-void *rout(void *arg)
+void *thread_run(void *arg)
 {
-    (void)arg;
-    int i;
-    for(;;)
+    while(1)
     {
-        printf("I am thread 1!\n");
+        printf("new pthread,thread is : %u,pid :%d\n",pthread_self(),getpid());
         sleep(1);
     }
 }
 int main()
 {
     pthread_t tid;
-    int ret = pthread_create(&tid,NULL,rout,NULL); 
-    if(ret != 0)
+    pthread_create(&tid,NULL,thread_run,NULL);
+    while(1)
     {
-        fprintf(stderr,"pthread_create : %s\n",strerror(ret));
-        exit(EXIT_FAILURE);
-    }
-    int i;
-    for(;;)
-    {
-        printf("I am main thread!\n");
-        sleep(1);
+        printf("main pthread,thread is : %u,pid %d\n",pthread_self(),getpid());
+        sleep(3);
     }
     return 0;
 }

@@ -1,5 +1,5 @@
-create:create.c
-	gcc -o $@ $^
+cond:cond.c
+	gcc -o $@ $^ -lpthread
 .PHONY:clean
 clean:
-	rm -f create
+	rm -f cond

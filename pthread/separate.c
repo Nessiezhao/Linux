@@ -19,7 +19,7 @@ int main()
     }
     int ret = 0;
     sleep(1);
-    if(phread_join(tid,NULL) == 0)
+    if(pthread_join(tid,NULL) == 0)
     {
         printf("pthread wait success!\n");
         ret = 0;
