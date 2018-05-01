@@ -1,5 +1,5 @@
-cond:cond.c
+pro1:pro1.c
 	gcc -o $@ $^ -lpthread
 .PHONY:clean
 clean:
-	rm -f cond
+	rm -f pro1
