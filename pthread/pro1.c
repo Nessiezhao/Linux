@@ -2,89 +2,134 @@
 #include<stdlib.h>
 #include<unistd.h>
 #include<pthread.h>
+#pragma warning(disable:4996)
 
-#define CONSUMERS_COUNT 2
-#define PRODUCERS_COUNT 2
-
-struct msg
+typedef int LinkListType;
+typedef struct LinkNode
 {
-    struct msg *next;
-    int num;
-};
-struct msg *head = NULL;
+    LinkListType data;
+    struct LinkNode* next;
+}LinkNode;
 
-pthread_cond_t cond;
-pthread_mutex_t mutex;
-pthread_t threads[CONSUMERS_COUNT+PRODUCERS_COUNT];
+LinkNode* List = NULL;
 
-void *consumer(void *p)
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+
+LinkNode* CreateNode(LinkListType value)
 {
-    int num = *(int*)p;
-    free(p);
-    struct msg *mp;
-    for(;;)
+    LinkNode* new_node = (LinkNode*)malloc(sizeof(LinkNode));
+    if(new_node == NULL)
     {
-        pthread_mutex_lock(&mutex);
-        while(head == NULL)
-        {
-            printf("%d begin wait a condition...\n",num);
-            pthread_cond_wait(&cond,&mutex);
-        }
-        printf("%d end wait a condition...\n",num);
-        printf("%d begin consume product...\n",num);
-        mp = head;
-        head = mp->next;
-        pthread_mutex_unlock(&mutex);
-        printf("Consume %d\n",mp->num);
-        free(mp);
-        printf("%d end consume product...\n",num);
-        sleep(rand()%5);
+        perror("malloc");
+        exit(1);
+    }
+    new_node->data = value;
+    new_node->next = NULL;
+    return new_node;
+}
+void PrintList(LinkNode* head)
+{
+    if(head == NULL)
+    {
+        return;
+    }
+    LinkNode* cur = head;
+    while(cur != NULL)
+    {
+        printf("%d",cur->data);
+        cur = cur->next;
+    }
+    printf("\n");
+}
+void PushFront(LinkNode** phead,LinkListType value)
+{
+    if(phead == NULL)
+    {
+        *phead = CreateNode(value);
+        return;
+    }
+        LinkNode* new_node = CreateNode(value);
+        new_node->next = (*phead);
+        *phead = new_node;
+}
+void PopFront(LinkNode** phead,int* out)
+{
+    if(phead == NULL)
+    {
+        return;
+    }
+    if(*phead == NULL)
+    {
+        return;
+    }
+        LinkNode* to_erase = (*phead)->next;
+        (*phead)->next = to_erase->next;
+        *out = to_erase->data;
+        free(to_erase);
+}
+void DestroyList(LinkNode** phead)
+{
+    if(phead == NULL)
+    {
+        return;
+    }
+    if(*phead == NULL)
+    {
+        return;
+    }
+    while(*phead != NULL)
+    {
+        LinkNode* cur = NULL;
+        cur = (*phead)->next;
+        free(*phead);
+        *phead = cur;
     }
 }
-
-void *producer(void *p)
+void *consume(void *arg)
 {
-    struct msg *mp;
-    int num = *(int*)p;
-    free(p);
-    for(;;)
+    usleep(1000);
+    int c = 0;
+    while(1)
     {
-        printf("%d begin produce product...\n",num);
-        mp = (struct msg*)malloc(sizeof(struct msg));
-        mp->num = rand()%100+1;
-        printf("produce %d\n",mp->num);
-        pthread_mutex_lock(&mutex);
-        mp->next = head;
-        head = mp;
-        printf("%d end produce product...\n",num);
+        c = -1;
+        pthread_mutex_lock(&lock);
+        while(List->next == NULL)
+        {
+            printf("consumer begin waiting...\n");
+            pthread_cond_wait(&cond,&lock);
+        }
+        PopFront(&List,&c);
+        pthread_mutex_unlock(&lock);
+        printf("consumer is done : %d\n",c);
+    }
+}
+void *product(void* arg)
+{
+    sleep(1);
+    while(1)
+    {
+        int num = rand()%1000+1;
+        pthread_mutex_lock(&lock);
+        PushFront(&List,num);
+        
+        pthread_mutex_unlock(&lock);
         pthread_cond_signal(&cond);
-        pthread_mutex_unlock(&mutex);
-        sleep(rand()%5);
+        printf("product is done : %d\n",num);
     }
 }
 int main()
 {
-    srand(time(NULL));
-    pthread_cond_init(&cond,NULL);
-    pthread_mutex_init(&mutex,NULL);
+    pthread_t c,p;
+    pthread_create(&c,NULL,consume,NULL);
+    pthread_create(&p,NULL,product,NULL);
 
-    int i = 0;
-    for(;i < CONSUMERS_COUNT;i++)
-    {
-        int *p = (int*)malloc(sizeof(int));
-        *p = i;
-        pthread_create(&threads[i],NULL,consumer,(void*)p);
-    }
-    for(i = 0;i < PRODUCERS_COUNT;i++)
-    {
-        int *p = (int*)malloc(sizeof(int));
-        *p = i;
-        pthread_create(&threads[i+CONSUMERS_COUNT],NULL,producer,(void*)p);
-    }
-    for(i = 0;i < CONSUMERS_COUNT+PRODUCERS_COUNT;i++)
-    {
-        pthread_join(threads[i],NULL);
-    }
-    pthread_mutex_destroy(&mutex);
+    pthread_join(c,NULL);
+    pthread_join(p,NULL);
+
+    pthread_mutex_destroy(&lock);
     pthread_cond_destroy(&cond);
+
+    DestroyList(&List);
+    return 0;
 }
