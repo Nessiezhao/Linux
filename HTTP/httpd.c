@@ -5,8 +5,9 @@
 #include<netinet/in.h>
 #include<arpa/inet.h>
 #include<unistd.h>
+#include<string.h>
 #include<pthread.h>
-
+#define MAX 1024
 static void usage(const char* proc)
 {
     printf("Usage:%s port\n",proc);//告诉客户端应该如何使用
@@ -40,9 +41,50 @@ static int startup(int port)
     }
     return sock;
 }
+//客户端可能发来的行分隔符有三种  \r  \n  \r\n
+int get_line(int sock,char line[],int size)
+{
+    int c = 'a';
+    int i = 0;
+    ssize_t s = 0;
+    while( i < size-1 && c != '\n')
+    {
+        s = recv(sock,&c,1,0);
+        if(s > 0)
+        {
+            if(c == '\r')
+            {
+                // \r -> \n  or  \r\n -> \n
+                recv(sock,&c,1,MSG_PEEK);
+                if(c != '\n')
+                {
+                    c = '\n';
+                }
+                else
+                {
+                    recv(sock,&c,1,0);
+                }
+            }
+            //c == \n
+            line[i++] = c;// \n 
+        }
+        else
+        {
+            break;
+        }
+    }
+    line[i] = '0';
+    return i;
+}
 static void* handler_request(void* arg)
 {
     int sock = (int)arg;
+    char line[MAX];
+    do{
+        get_line(sock,line,sizeof(line));
+        printf("%s",line);
+    }while(strcmp(line,"\n") != 0);
+    close(sock);
 }
 int main(int argc,char* argv[])
 {
