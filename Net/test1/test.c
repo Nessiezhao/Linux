@@ -14,6 +14,16 @@ void* Func1(void* p)
     }
     return NULL;
 }
+void* Func2(void* p)
+{
+    struct sockaddr_in* addr = (struct sockaddr_in*)p;
+    while(1)
+    {
+        char* ptr = inet_ntoa(addr->sin_addr);
+        printf("addr2:%s",ptr);
+    }
+    return NULL;
+}
 int main()
 {
     pthread_t tid1 = 0;
