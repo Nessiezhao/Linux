@@ -50,24 +50,25 @@ static int startup(int port)
 //统一按行'\n'来处理,一次读取一个字符
 //按行获得文本，1.要从哪个套接字获得 2.获得之后要把获得的写到哪个缓冲区里 3.缓冲区多大
 int get_line(int sock,char line[],int size)
+    //从哪个套接字获得，将获得到的消息写到哪个缓冲区里，缓冲区多大
 {
-    int c = 'a';
+    int c = 'a';//只要初始化的值不是'\n'就可以
     int i = 0;
     ssize_t s = 0;
-    while( i < size-1 && c != '\n')
+    while( i < size-1 && c != '\n')//因为最后一个应该放'\0'所以i要小于size-1
     {
-        s = recv(sock,&c,1,0);
+        s = recv(sock,&c,1,0);//一次读1个
         if(s > 0)
         {
-            if(c == '\r')
+            if(c == '\r')//如果c是'\r'
             {
                 // \r -> \n  or  \r\n -> \n
-                recv(sock,&c,1,MSG_PEEK);
-                if(c != '\n')
+                recv(sock,&c,1,MSG_PEEK);//用MSG_PEEK进行窥探下一个元素
+                if(c != '\n')//如果下一个字符不是'\n'说明此时的行分隔符只有'\r'
                 {
-                    c = '\n';
+                    c = '\n';//读进来的是'\r'，将'\r'转成'\n'
                 }
-                else
+                else//否则说明下一个字符是'\n'，但是'\n'还在缓冲区里，这次读不会被阻塞
                 {
                     recv(sock,&c,1,0);
                 }
@@ -80,8 +81,8 @@ int get_line(int sock,char line[],int size)
             break;
         }
     }
-    line[i] = '0';
-    return i;
+    line[i] = '\0';
+    return i;//返回这一行有多少个字符
 }
 static void* handler_request(void* arg)
 {
