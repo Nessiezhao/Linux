@@ -5,10 +5,13 @@
 #include<netinet/in.h>
 #include<arpa/inet.h>
 #include<unistd.h>
+#include<fcntl.h>
 #include<string.h>
 #include<strings.h>
 #include<pthread.h>
+#include<sys/stat.h>
 #define MAX 1024
+#define HOME_PAGE "index.html"
 static void usage(const char* proc)
 {
     printf("Usage:%s port\n",proc);//告诉客户端应该如何使用
@@ -85,21 +88,66 @@ int get_line(int sock,char line[],int size)
     line[i] = '\0';
     return i;//返回这一行有多少个字符
 }
+
+void clear_header(int sock)
+{
+    char line[MAX];
+    do{
+        get_line(sock,line,sizeof(line));
+        printf("%s",line);
+    }while(strcmp(line,"\n") != 0);
+}
+void echo_www(int sock,char* path,int size,int *err)
+{
+    clear_header(sock);//读到空行停下来,请求处理完了
+
+    int fd = open(path,O_RDONLY);
+    if(fd < 0)
+    {
+        *err = 404;
+        return;
+    }
+    char line[MAX];
+    sprintf(line,"HTTP/1.0 200 OK\r\n");
+    send(sock,line,strlen(line),0);
+    //sprintf(line,"Content-Type:text/html;charset=ISO-8859-1");
+    //send(sock,line,strlen(line),0);
+    sprintf(line,"\r\n");
+    sendfile(sock,fd,NULL,size);
+    close(fd);
+}
+void echo_error(int code)
+{
+    switch(code)
+    {
+    case 404:
+        break;
+    case 501:
+        break;
+    default:
+        break;
+    }
+}
 static void* handler_request(void* arg)
 {
     int sock = (int)arg;
     char line[MAX];
     char method[MAX/32];//方法
     char url[MAX];//请求的资源
-    int errCode;
+    char path[MAX];
+    int errCode = 200;
     int cgi = 0;//cgi 通用网关接口，是Http服务内置的一种标准，方便后对Http的功能进行二次扩展
+    char* query_string = NULL;
 #if Debug
     do{
         get_line(sock,line,sizeof(line));
         printf("%s",line);
     }while(strcmp(line,"\n") != 0);
 #else
+    //在向上交数据时，如果数据被显示到url中时，这种方法叫做GET方法
+    //在向上交数据时，数据不会被显示在url中,而放在了正文部分,这种方法叫做POST方法
     //首先要把第一行拿到
+    //GET方法可以有参数可以没参数，而POST方法在Http中必须必须得有cgi方式运行
     if(get_line(sock,line,sizeof(line)) < 0)//获得行出错
     {
         errCode = 404;//错误码
@@ -116,7 +164,15 @@ static void* handler_request(void* arg)
         j++;
     }
     method[i] = '\0';
-    if(strcasecmp(method,"GET") && strcasecmp(method,"POST"))
+    if(strcasecmp(method,"GET") == 0)
+    {
+        
+    }
+    else if(strcasecmp(method,"POST") == 0)
+    {
+        cgi = 1;
+    }
+    else
     {
         errCode = 404;
         goto end;
@@ -134,8 +190,69 @@ static void* handler_request(void* arg)
     }
     url[i] = '\0';
     //方法要么是GET要么是POST，而且资源已经拿到
+    //检测当前是否带问好(GET方法才进行判断)
+    if(strcasecmp(method,"GET") == 0)
+    {
+        query_string = url;
+        while(*query_string)
+        {
+            if(*query_string == '?')
+            {
+                *query_string = '\0';
+                query_string++;
+                //GET方法带参用cgi
+                cgi = 1;
+                break;
+            }
+            query_string++;
+        }
+    }
+    //method[GET,POST], cgi[0|1],url[],query_string[NULL|arg]
+    //url -> wwwroot/a/b/c.html | url -> wwwroot/
+    sprintf(path,"wwwroot%s",url);
+    if(path[strlen(path)-1] == '/')
+    {
+        strcat(path,HOME_PAGE);
+    }
+    //判断要请求的资源是否存在
+    struct stat st;
+    if(stat(path,&st) < 0)
+    {
+        errCode = 404;
+        goto end;
+    }
+    else//文件找到了,如果文件具有可执行权限，就要以cgi的方式运行
+        //三个组只要有一个有可执行权限，就认为有可执行权限
+    {
+        if(S_ISDIR(st.st_mode))//如果是目录
+        {
+            strcat(path,HOME_PAGE);
+        }
+        else
+        {
+            if((st.st_mode & S_IXUSR) || (st.st_mode & S_IXGRP) || (st.st_mode & S_IXOTH))
+            {
+                cgi = 1;
+            }
+
+        }
+        if(cgi)
+        {
+            //exe_cgi();
+        }
+        else//GET方法并且没有传参
+        {
+            echo_www(sock,path,st.st_size,&errCode);
+        }
+
+    }
+    
 #endif
 end:
+    if(errCode != 200)
+    {
+        echo_error(errCode);
+    }
     close(sock);//作用：1.回收了本地描述符资源   2.关闭了连接
 }
 int main(int argc,char* argv[])
