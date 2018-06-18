@@ -6,6 +6,7 @@
 #include<arpa/inet.h>
 #include<unistd.h>
 #include<string.h>
+#include<strings.h>
 #include<pthread.h>
 #define MAX 1024
 static void usage(const char* proc)
@@ -88,10 +89,53 @@ static void* handler_request(void* arg)
 {
     int sock = (int)arg;
     char line[MAX];
+    char method[MAX/32];//方法
+    char url[MAX];//请求的资源
+    int errCode;
+    int cgi = 0;//cgi 通用网关接口，是Http服务内置的一种标准，方便后对Http的功能进行二次扩展
+#if Debug
     do{
         get_line(sock,line,sizeof(line));
         printf("%s",line);
     }while(strcmp(line,"\n") != 0);
+#else
+    //首先要把第一行拿到
+    if(get_line(sock,line,sizeof(line)) < 0)//获得行出错
+    {
+        errCode = 404;//错误码
+        goto end;//第一行读取都有错误，http不能处理，直接不处理
+    }
+    //第一行获取成功
+    //第一个提取方法字段
+    int i = 0;
+    int j = 0;
+    while(i < sizeof(method) - 1 && j < sizeof(line) && !isspace(line[j]))
+    {
+        method[i] = line[j];
+        i++;
+        j++;
+    }
+    method[i] = '\0';
+    if(strcasecmp(method,"GET") && strcasecmp(method,"POST"))
+    {
+        errCode = 404;
+        goto end;
+    }
+    while(j < sizeof(line) && isspace(line[j]))
+    {
+        j++;
+    }
+    i = 0;
+    while(i < sizeof(url)-1 && j < sizeof(line) && !isspace(line[j]))
+    {
+        url[i] = line[j];
+        i++;
+        j++;
+    }
+    url[i] = '\0';
+    //方法要么是GET要么是POST，而且资源已经拿到
+#endif
+end:
     close(sock);//作用：1.回收了本地描述符资源   2.关闭了连接
 }
 int main(int argc,char* argv[])
